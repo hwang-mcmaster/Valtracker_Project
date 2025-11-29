@@ -1,6 +1,6 @@
 import io
 import csv
-from app.adapters.esports_adapter import flat_matches
+from ..adapters.esports_adapter import flat_matches
 
 
 def team_report_csv(team_name: str, n: int = 10) -> str:
