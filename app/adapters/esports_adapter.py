@@ -3,6 +3,7 @@ import app.config as cfg
 
 BASE = "https://api.pandascore.co/valorant"
 
+
 def _safe(s, d="TBD"):
     return s if isinstance(s, str) and s.strip() else d
 
@@ -31,8 +32,14 @@ def _normalize_match(m: dict) -> dict:
     }
 
 
-def team_matches(team_query: str, per_page: int = 5) -> list[dict]:
+def team_matches(
+    team_query: str,
+    completed_limit: int = 5,
+    upcoming_limit: int = 5,
+) -> dict:
     url = f"{BASE}/matches"
+    # ask for more than we need so we can split into groups
+    per_page = (completed_limit + upcoming_limit) * 2 or 10
     params = {"page": 1, "per_page": per_page, "sort": "-begin_at"}
     headers = {"Authorization": f"Bearer {cfg.PANDASCORE_API_KEY}"}
 
@@ -41,26 +48,45 @@ def team_matches(team_query: str, per_page: int = 5) -> list[dict]:
         r.raise_for_status()
     except requests.RequestException as e:
         print(f"Error talking to Pandascore {e}")
-        return []
+        return {"recent": [], "upcoming": []}
 
     raw = r.json()
     if not isinstance(raw, list):
         print("Unexpected payload from Pandascore", raw)
-        return []
+        return {"recent": [], "upcoming": []}
 
     tq = (team_query or "").lower()
 
-    all_normalized = [_normalize_match(m) for m in raw]
+    def matches_team(row: dict) -> bool:
+        if not tq:
+            return True
+        s = f"{row['name']} {row['event']} {row['teams']}".lower()
+        return tq in s
 
-    filtered = []
-    for row in all_normalized:
-        in_name = tq in row["name"].lower()
-        in_event = tq in row["event"].lower()
-        in_teams = tq in row["teams"].lower()
-        if tq and (in_name or in_event or in_teams):
-            filtered.append(row)
+    recent: list[dict] = []
+    upcoming: list[dict] = []
+    canceled: list[dict] = []
 
-    if filtered:
-        return filtered[:per_page]
+    for m in raw:
+        row = _normalize_match(m)
+        status_raw = (m.get("status") or "").lower()
 
-    return all_normalized[:per_page]
+        if not matches_team(row):
+            continue
+
+        if status_raw in {"finished", "running"}:
+            recent.append(row)
+        elif status_raw in {"not_started", "upcoming", "postponed"}:
+            upcoming.append(row)
+        elif status_raw == "canceled":
+            canceled.append(row)
+        else:
+            upcoming.append(row)
+
+    recent = recent[:completed_limit]
+    upcoming = upcoming[:upcoming_limit]
+
+    if not recent and not upcoming and canceled:
+        recent = canceled[:completed_limit]
+
+    return {"recent": recent, "upcoming": upcoming}
