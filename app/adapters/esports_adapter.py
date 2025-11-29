@@ -55,7 +55,8 @@ def team_matches(
         print("Unexpected payload from Pandascore", raw)
         return {"recent": [], "upcoming": []}
 
-    tq = (team_query or "").lower()
+    # trim spaces then lower case so an extra space does not break matching
+    tq = (team_query or "").strip().lower()
 
     def matches_team(row: dict) -> bool:
         if not tq:
