@@ -39,7 +39,12 @@ def team_matches(
     include_canceled: bool = False,
 ) -> dict:
     url = f"{BASE}/matches"
-    per_page = (completed_limit + upcoming_limit) * 2 or 10
+
+    # Ask Pandascore for a larger window of recent matches
+    # so there is a better chance the team name appears
+    base_window = (completed_limit + upcoming_limit) * 2 or 10
+    per_page = max(base_window, 100)
+
     params = {"page": 1, "per_page": per_page, "sort": "-begin_at"}
     headers = {"Authorization": f"Bearer {cfg.PANDASCORE_API_KEY}"}
 
@@ -55,7 +60,6 @@ def team_matches(
         print("Unexpected payload from Pandascore", raw)
         return {"recent": [], "upcoming": []}
 
-    # trim spaces then lower case so an extra space does not break matching
     tq = (team_query or "").strip().lower()
 
     def matches_team(row: dict) -> bool:
