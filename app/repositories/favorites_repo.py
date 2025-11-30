@@ -1,26 +1,47 @@
 from app.db import get_conn
-from app.models import Favorite
 
-DDL = """
-CREATE TABLE IF NOT EXISTS favorites(
-  id SERIAL PRIMARY KEY,
-  user_id VARCHAR(64),
-  team_name TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-"""
 
-def init():
-    with get_conn() as c, c.cursor() as cur:
-        cur.execute(DDL)
+def init() -> None:
+    """Create the favorites table if it does not exist."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            create table if not exists favorites (
+                id bigserial primary key,
+                user_id text not null,
+                team_name text not null,
+                created_at timestamptz not null default now()
+            )
+            """
+        )
+        conn.commit()
 
-def add_favorite(user_id: str, team_name: str) -> int:
-    with get_conn() as c, c.cursor() as cur:
-        cur.execute("INSERT INTO favorites(user_id,team_name) VALUES(%s,%s) RETURNING id", (user_id, team_name))
-        return cur.fetchone()[0]
 
-def latest_favorites(limit: int = 10) -> list[Favorite]:
-    with get_conn() as c, c.cursor() as cur:
-        cur.execute("SELECT id,user_id,team_name FROM favorites ORDER BY id DESC LIMIT %s", (limit,))
+def add(user_id: str, team_name: str) -> int:
+    """Insert one favorite row and return its new id."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "insert into favorites (user_id, team_name) values (%s, %s) returning id",
+            (user_id, team_name),
+        )
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        return new_id
+
+
+def latest(limit: int = 10) -> list[dict]:
+    """Return the most recent favorites."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select id, user_id, team_name, created_at
+            from favorites
+            order by created_at desc
+            limit %s
+            """,
+            (limit,),
+        )
         rows = cur.fetchall()
-        return [Favorite(id=r[0], user_id=r[1], team_name=r[2]) for r in rows]
+        cols = [d[0] for d in cur.description]
+
+    return [dict(zip(cols, r)) for r in rows]

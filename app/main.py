@@ -38,16 +38,18 @@ def team(name: str = Query(...)):
 
     return {"team": name, "matches": matches}
 
-
 @api.post("/favorites")
-def mark_favorite(team_name: str = Query(...)):
-    new_id = add(team_name)
-    return {"id": new_id, "team_name": team_name}
+def mark_favorite(
+    team_name: str = Query(..., description="Team name to mark as favorite"),
+    user_id: str = Query("demo_user", description="User id or username")
+):
+    new_id = add(team_name, user_id)
+    return {"id": new_id, "user_id": user_id, "team_name": team_name}
 
 
 @api.get("/favorites")
-def list_favorites():
-    return {"favorites": latest(10)}
+def list_favorites(limit: int = 10):
+    return {"items": latest(limit)}
 
 
 @api.get("/report.csv", response_class=PlainTextResponse)
